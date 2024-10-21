@@ -7,13 +7,12 @@ import numpy as np
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).to(device)
 
-# Ruta del video en tu máquina
-video_path = './Cámara de seguridad graba a fantasma que atemoriza los estudios de Día a Día.mp4'
-cap = cv2.VideoCapture(video_path)
+# Inicializar la captura de video desde la cámara
+cap = cv2.VideoCapture(0)  # Usa la cámara por defecto
 
-# Verificar si el video se ha cargado correctamente
+# Verificar si la cámara se ha abierto correctamente
 if not cap.isOpened():
-    print("Error: No se puede abrir el archivo de video.")
+    print("Error: No se puede acceder a la cámara.")
 else:
     # Obtener un frame inicial del video
     ret, frame = cap.read()
@@ -60,6 +59,11 @@ else:
 
         # Mostrar el mensaje de instrucciones hasta que se seleccione un área
         while not area_selected:
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: No se pudo leer un frame de la cámara.")
+                break
+
             cv2.putText(frame, 'Selecciona un área:', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.imshow('Instrucciones', cv2.putText(np.zeros((200, 300, 3), dtype=np.uint8), instructions, (10, 30), 
                                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1))
@@ -72,25 +76,28 @@ else:
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        # Procesar el video cuadro por cuadro después de seleccionar el área
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reiniciar el video al inicio
+        # No reiniciamos el video al inicio porque es una cámara en vivo
+        # cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Esta línea se elimina o se comenta
+
         alert_threshold = 3  # 3 segundos
         detection_time = 0  # Contador de tiempo en segundos
         alert_sent = False
         last_detection_time = 0  # Último tiempo de detección
 
-        # URL del endpoint de Power Automate
+        # URL del endpoint de Power Automate (mantén tu URL)
         power_automate_url = 'https://prod-11.westus.logic.azure.com:443/workflows/fa3bd1c3ba094644a2a143c2399b4f11/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=WtIleEshRLLj_jhsEcCVBwGyqgqmLi2nYunYZktxod4'
 
-        # Obtener los FPS del video
-        fps = cap.get(cv2.CAP_PROP_FPS) if cap.get(cv2.CAP_PROP_FPS) > 0 else 30
-        delay = int(100 / fps)  # Calcular delay para simular tiempo real
+        # Obtener los FPS de la cámara
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps == 0 or fps is None:
+            fps = 30  # Establecer FPS predeterminado si no se puede obtener de la cámara
+        delay = int(1000 / fps)  # Calcular delay en milisegundos
 
         # Procesar el video
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                print("Fin del video o error al cargar.")
+                print("No se pudo leer un frame de la cámara.")
                 break
 
             # Crear una máscara para el área seleccionada
@@ -106,7 +113,7 @@ else:
 
             for *box, conf, cls in detections.tolist():
                 cls = int(cls)  # Convertir la clase a entero para comparación
-                
+
                 # Verificar si la clase detectada es 'person' y la confianza es mayor a 0.7
                 if cls == 0 and conf > 0.7:  # '0' es la clase para 'person' en COCO
                     # Ajustar las coordenadas de la caja de detección al área seleccionada
@@ -120,7 +127,7 @@ else:
                         area_coords[1] < box[1] < area_coords[3]):
                         person_detected_in_area = True
                         detection_time += 1 / fps  # Incrementar el contador de tiempo en segundos
-                        
+
                         # Cambiar el color de la caja si ha estado más de 3 segundos
                         if detection_time >= alert_threshold:
                             color = (0, 0, 255)  # Rojo
@@ -151,7 +158,7 @@ else:
 
             # Dibujar el área seleccionada
             cv2.rectangle(frame, (area_coords[0], area_coords[1]), (area_coords[2], area_coords[3]), (0, 255, 0), 2)
-            cv2.putText(frame, 'Reconocimiento en Area', (area_coords[0], area_coords[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(frame, 'Reconocimiento en Área', (area_coords[0], area_coords[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
             # Mostrar el contador de detección
             cv2.putText(frame, f'Tiempo: {int(detection_time)}s', (30, frame.shape[0] - 30), 
