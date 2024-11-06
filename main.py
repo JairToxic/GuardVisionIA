@@ -8,7 +8,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True).to(device)
 
 # Ruta del video en tu máquina
-video_path = './Cámara de seguridad graba a fantasma que atemoriza los estudios de Día a Día.mp4'
+video_path = './La ciudad!! Gente cruzando la calle maña est mapocho.MTS.mp4'
 cap = cv2.VideoCapture(video_path)
 
 # Verificar si el video se ha cargado correctamente
