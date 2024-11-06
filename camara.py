@@ -14,13 +14,15 @@ cap = cv2.VideoCapture(0)  # Usa la cámara por defecto
 if not cap.isOpened():
     print("Error: No se puede acceder a la cámara.")
 else:
-    # Obtener un frame inicial del video
-    ret, frame = cap.read()
+    # Leer un frame inicial de la cámara
+    ret, initial_frame = cap.read()
     if not ret:
         print("Error: No se pudo leer el primer frame.")
         cap.release()
-        cv2.destroyAllWindows()
     else:
+        # Crear una ventana y establecer el callback de mouse para dibujar
+        cv2.namedWindow('Vivo')
+        
         # Variables para dibujar el rectángulo
         drawing = False
         start_point = (-1, -1)
@@ -33,6 +35,7 @@ else:
             if event == cv2.EVENT_LBUTTONDOWN:
                 drawing = True
                 start_point = (x, y)
+                area_selected = False  # Reiniciar selección al hacer un nuevo clic
 
             elif event == cv2.EVENT_MOUSEMOVE:
                 if drawing:
@@ -43,41 +46,34 @@ else:
                 area_coords = (start_point[0], start_point[1], x, y)
                 area_selected = True
 
-        # Crear una ventana para mostrar el frame inicial
-        cv2.namedWindow('Seleccionar Área')
-        cv2.setMouseCallback('Seleccionar Área', draw_rectangle)
+        # Establecer el callback del mouse
+        cv2.setMouseCallback('Vivo', draw_rectangle)
 
-        # Crear una ventana para mostrar instrucciones
-        cv2.namedWindow('Instrucciones', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Instrucciones', 300, 200)
-        instructions = (
-            "Instrucciones:\n"
-            "1. Haz clic y arrastra el mouse para dibujar un área.\n"
-            "2. Suelta el botón del mouse para confirmar.\n"
-            "3. Presiona 'q' para salir."
-        )
+        # Mostrar el frame inicial para la selección del área
+        while True:
+            frame_copy = initial_frame.copy()
 
-        # Mostrar el mensaje de instrucciones hasta que se seleccione un área
-        while not area_selected:
-            ret, frame = cap.read()
-            if not ret:
-                print("Error: No se pudo leer un frame de la cámara.")
+            # Mostrar instrucciones
+            cv2.putText(frame_copy, 'Selecciona un área y presiona "c" para continuar', (30, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+            # Dibujar el área seleccionada mientras se arrastra el mouse
+            if start_point != (-1, -1) and drawing:
+                cv2.rectangle(frame_copy, (start_point[0], start_point[1]), (area_coords[2], area_coords[3]), (0, 255, 0), 2)
+
+            # Dibujar el rectángulo final una vez seleccionado
+            if area_selected:
+                cv2.rectangle(frame_copy, (area_coords[0], area_coords[1]), (area_coords[2], area_coords[3]), (0, 255, 0), 2)
+
+            # Mostrar el cuadro con el área de selección
+            cv2.imshow('Vivo', frame_copy)
+
+            # Continuar solo si el usuario presiona 'c' después de seleccionar el área
+            if cv2.waitKey(1) & 0xFF == ord('c') and area_selected:
                 break
 
-            cv2.putText(frame, 'Selecciona un área:', (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.imshow('Instrucciones', cv2.putText(np.zeros((200, 300, 3), dtype=np.uint8), instructions, (10, 30), 
-                                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1))
-
-            if start_point != (-1, -1) and not drawing:
-                cv2.rectangle(frame, (area_coords[0], area_coords[1]), (area_coords[2], area_coords[3]), (0, 255, 0), 2)
-
-            cv2.imshow('Seleccionar Área', frame)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        # No reiniciamos el video al inicio porque es una cámara en vivo
-        # cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Esta línea se elimina o se comenta
+        # Cerrar la ventana de selección de área
+        cv2.destroyWindow('Vivo')
 
         alert_threshold = 3  # 3 segundos
         detection_time = 0  # Contador de tiempo en segundos
@@ -93,17 +89,22 @@ else:
             fps = 30  # Establecer FPS predeterminado si no se puede obtener de la cámara
         delay = int(1000 / fps)  # Calcular delay en milisegundos
 
-        # Procesar el video
+        # Iniciar la transmisión en tiempo real con el área seleccionada
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 print("No se pudo leer un frame de la cámara.")
                 break
 
+            # Dibujar el área seleccionada en cada frame
+            cv2.rectangle(frame, (area_coords[0], area_coords[1]), (area_coords[2], area_coords[3]), (0, 255, 0), 2)
+            cv2.putText(frame, 'Reconocimiento en Área', (area_coords[0], area_coords[1] - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
             # Crear una máscara para el área seleccionada
             mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-            cv2.rectangle(mask, (area_coords[0], area_coords[1]), (area_coords[2], area_coords[3]), 255, -1)  # Rellenar el área seleccionada
-            masked_frame = cv2.bitwise_and(frame, frame, mask=mask)  # Aplicar la máscara al cuadro
+            cv2.rectangle(mask, (area_coords[0], area_coords[1]), (area_coords[2], area_coords[3]), 255, -1)
+            masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
 
             # Hacer la detección en el cuadro enmascarado
             results = model(masked_frame)
@@ -112,60 +113,51 @@ else:
             person_detected_in_area = False
 
             for *box, conf, cls in detections.tolist():
-                cls = int(cls)  # Convertir la clase a entero para comparación
+                cls = int(cls)
 
-                # Verificar si la clase detectada es 'person' y la confianza es mayor a 0.7
-                if cls == 0 and conf > 0.7:  # '0' es la clase para 'person' en COCO
+                if cls == 0 and conf > 0.7:  # Verificar si es 'persona' con confianza alta
                     # Ajustar las coordenadas de la caja de detección al área seleccionada
                     box[0] += area_coords[0]
                     box[1] += area_coords[1]
                     box[2] += area_coords[0]
                     box[3] += area_coords[1]
 
-                    # Verificar si la persona está dentro del área definida
                     if (area_coords[0] < box[0] < area_coords[2] and 
                         area_coords[1] < box[1] < area_coords[3]):
                         person_detected_in_area = True
-                        detection_time += 1 / fps  # Incrementar el contador de tiempo en segundos
+                        detection_time += 1 / fps
 
-                        # Cambiar el color de la caja si ha estado más de 3 segundos
+                        # Cambiar el color de la caja si supera el umbral de alerta
                         if detection_time >= alert_threshold:
                             color = (0, 0, 255)  # Rojo
-                            if not alert_sent:  # Solo enviar la alerta si no se ha enviado antes
+                            if not alert_sent:
                                 requests.post(power_automate_url)  # Enviar notificación
-                                alert_sent = True  # Marcar que la alerta se ha enviado
+                                alert_sent = True
                         else:
-                            color = (0, 255, 0)  # Verde si no ha superado el tiempo
+                            color = (0, 255, 0)  # Verde si no ha alcanzado el tiempo
                     else:
                         color = (0, 255, 0)  # Verde si está fuera del área
                         detection_time = 0  # Reiniciar el contador si sale del área
 
-                    # Dibujar la caja de detección en el marco
+                    # Dibujar la caja de detección
                     cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), color, 2)
                     cv2.putText(frame, 'Persona', (int(box[0]), int(box[1] - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
             # Si no hay personas detectadas
             if not person_detected_in_area:
-                last_detection_time += 1 / fps  # Incrementar el tiempo sin detección
-                # Reiniciar el contador si no hay personas durante más de 3 segundos
+                last_detection_time += 1 / fps
                 if last_detection_time >= 3:
                     detection_time = 0
-                    alert_sent = False  # Resetear la alerta
-                    color = (0, 255, 0)  # Reiniciar el color a verde
+                    alert_sent = False
             else:
-                # Si hay detecciones, reiniciar el contador de tiempo sin detección
                 last_detection_time = 0
-
-            # Dibujar el área seleccionada
-            cv2.rectangle(frame, (area_coords[0], area_coords[1]), (area_coords[2], area_coords[3]), (0, 255, 0), 2)
-            cv2.putText(frame, 'Reconocimiento en Área', (area_coords[0], area_coords[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
             # Mostrar el contador de detección
             cv2.putText(frame, f'Tiempo: {int(detection_time)}s', (30, frame.shape[0] - 30), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-            # Mostrar el cuadro con la detección
-            cv2.imshow('Detección', frame)
+            # Mostrar el cuadro con la detección y el área seleccionada, aqui creaba una nueva ventana con otro nombre
+            cv2.imshow('Vivo', frame)
 
             # Esperar y salir si se presiona 'q'
             if cv2.waitKey(delay) & 0xFF == ord('q'):
