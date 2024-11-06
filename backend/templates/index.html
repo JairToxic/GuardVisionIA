@@ -4,9 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detección de Personas</title>
+    <style>
+        #video-container {
+            position: relative;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            border: 1px dashed red;
+        }
+    </style>
 </head>
 <body>
     <h1>Detección de Personas en Video</h1>
-    <img src="{{ url_for('video') }}" width="800" />
+    <div id="video-container">
+        <img id="video" src="{{ url_for('video') }}" width="800" />
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let startX, startY, width, height;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            startX = e.offsetX;
+            startY = e.offsetY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                width = e.offsetX - startX;
+                height = e.offsetY - startY;
+                drawRectangle(startX, startY, width, height);
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+            sendCoordinates(startX, startY, width, height);
+        });
+
+        function drawRectangle(x, y, w, h) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, w, h);
+        }
+
+        function sendCoordinates(x, y, w, h) {
+            // Enviar las coordenadas al servidor para que las use en la detección
+            fetch('/set_area', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ x, y, w, h })
+            });
+        }
+    </script>
 </body>
 </html>

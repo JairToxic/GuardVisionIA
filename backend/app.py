@@ -2,8 +2,7 @@ import cv2
 import torch
 import requests
 import numpy as np
-import threading
-from flask import Flask, render_template, Response
+from flask import Flask, render_template, Response, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
@@ -12,7 +11,7 @@ app = Flask(__name__)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Usando dispositivo: {device}")  # Verifica si se está usando CUDA o CPU
 
-# Cargar el modelo YOLOv5 preentrenado (usamos 'yolov5n' para optimizar la velocidad)
+# Cargar el modelo YOLOv5 preentrenado
 model = torch.hub.load('ultralytics/yolov5', 'yolov5n', pretrained=True).to(device)
 
 # URL del endpoint de Power Automate
@@ -29,9 +28,23 @@ if not cap.isOpened():
 # Usamos ThreadPoolExecutor para gestionar los hilos de manera más eficiente
 executor = ThreadPoolExecutor(max_workers=2)
 
+# Variable para almacenar las coordenadas del área seleccionada
+area_coords = (100, 100, 400, 400)
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/set_area', methods=['POST'])
+def set_area():
+    global area_coords
+    data = request.get_json()
+    x = data.get('x')
+    y = data.get('y')
+    w = data.get('w')
+    h = data.get('h')
+    area_coords = (x, y, x + w, y + h)
+    return jsonify(success=True)
 
 # Función para procesar cada frame de manera asíncrona
 def process_frame(frame):
@@ -46,7 +59,6 @@ def process_frame(frame):
 
 # Generar el flujo de frames para la transmisión de video
 def gen_frames():
-    area_coords = (100, 100, 400, 400)  # Coordenadas de ejemplo del área seleccionada
     detection_time = 0
     alert_sent = False
 
