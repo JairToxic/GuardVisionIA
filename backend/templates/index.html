@@ -7,6 +7,7 @@
     <style>
         #video-container {
             position: relative;
+            margin-bottom: 10px;
         }
         #canvas {
             position: absolute;
@@ -15,18 +16,29 @@
             z-index: 1;
             border: 1px dashed red;
         }
+        #start-video {
+            display: block;
+            margin: 10px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <h1>Detección de Personas en Video</h1>
     <div id="video-container">
-        <img id="video" src="{{ url_for('video') }}" width="800" />
+        <!-- Cargar la imagen inicial del video para la configuración del área -->
+        <img id="video" src="/capture" width="800" />
         <canvas id="canvas" width="800" height="600"></canvas>
     </div>
+    <!-- Botón para iniciar la transmisión de video -->
+    <button id="start-video" disabled>Iniciar Video</button>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('start-video');
         let isDrawing = false;
         let startX, startY, width, height;
 
@@ -47,6 +59,7 @@
         canvas.addEventListener('mouseup', () => {
             isDrawing = false;
             sendCoordinates(startX, startY, width, height);
+            startButton.disabled = false;  // Habilita el botón para iniciar el video
         });
 
         function drawRectangle(x, y, w, h) {
@@ -57,15 +70,23 @@
         }
 
         function sendCoordinates(x, y, w, h) {
-            // Enviar las coordenadas al servidor para que las use en la detección
             fetch('/set_area', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ x, y, w, h })
-            });
+            }).then(() => clearCanvas());
         }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Inicia el video una vez configurada el área
+        startButton.addEventListener('click', () => {
+            document.getElementById('video').src = "{{ url_for('video') }}";
+        });
     </script>
 </body>
 </html>

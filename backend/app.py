@@ -39,22 +39,25 @@ def index():
 def set_area():
     global area_coords
     data = request.get_json()
-    x = data.get('x')
-    y = data.get('y')
-    w = data.get('w')
-    h = data.get('h')
+    x = int(data.get('x', 0))
+    y = int(data.get('y', 0))
+    w = int(data.get('w', 0))
+    h = int(data.get('h', 0))
     area_coords = (x, y, x + w, y + h)
     return jsonify(success=True)
 
+@app.route('/capture')
+def capture():
+    ret, frame = cap.read()
+    if not ret:
+        return "Error: no se pudo obtener una captura del video.", 500
+    _, buffer = cv2.imencode('.jpg', frame)
+    return Response(buffer.tobytes(), mimetype='image/jpeg')
+
 # Función para procesar cada frame de manera asíncrona
 def process_frame(frame):
-    # Redimensionar el frame para mejorar el rendimiento
     frame_resized = cv2.resize(frame, (640, 640))  # Reducción de tamaño de imagen
-
-    # Realizar la detección de objetos
     results = model(frame_resized)
-
-    # Devolver los resultados de la detección
     return results
 
 # Generar el flujo de frames para la transmisión de video
@@ -67,13 +70,9 @@ def gen_frames():
         if not ret:
             break
 
-        # Llamar a la inferencia en un hilo separado para no bloquear el hilo principal
         future = executor.submit(process_frame, frame)
-
-        # Obtener el resultado de la inferencia
         results = future.result()
 
-        # Filtrar detecciones y aplicar la lógica de la alarma
         detections = results.xyxy[0]  # [xmin, ymin, xmax, ymax, conf, class]
         person_detected_in_area = False
 
