@@ -66,10 +66,30 @@
             border: 2px solid #00bcd4; /* Azul turquesa */
             overflow: hidden;
         }
-        canvas {
+        video {
+            position: absolute;
             width: 100%;
             height: 100%;
-            display: block;
+            top: 0;
+            left: 0;
+            z-index: 1; /* Asegura que el video esté debajo del canvas */
+            display: none; /* El video no se muestra hasta que se inicie */
+        }
+        canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 2; /* El canvas estará por encima del video */
+        }
+        .static-image {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 1; /* Imagen estática debajo del canvas */
         }
         .zone-list {
             width: 90%;
@@ -125,10 +145,17 @@
             <button id="add-zone">Definir Área</button>
             <button id="save-areas">Guardar</button>
             <button id="clear-areas">Limpiar Todo</button>
+            <button id="start-detection">Iniciar Detección</button> <!-- Botón para iniciar video -->
         </div>
 
-        <!-- Canvas para dibujar -->
+        <!-- Video -->
         <div class="drawing-container">
+            <!-- Imagen estática antes de iniciar el video -->
+            <canvas id="static-canvas"></canvas> <!-- Usamos un canvas para la captura de imagen -->
+            <video id="video-player" autoplay muted loop>
+                <source src="{{ url_for('video', filename='1.mp4') }}" type="video/mp4">
+                Tu navegador no soporta la etiqueta de video.
+            </video>
             <canvas id="drawing-canvas"></canvas>
         </div>
 
@@ -142,10 +169,16 @@
     <script>
         const canvas = document.getElementById("drawing-canvas");
         const context = canvas.getContext("2d");
+        const video = document.getElementById("video-player");
+        const staticCanvas = document.getElementById("static-canvas");
+        const staticContext = staticCanvas.getContext("2d");
+        const startDetectionButton = document.getElementById("start-detection");
 
         // Configuración del canvas
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
+        staticCanvas.width = staticCanvas.offsetWidth;
+        staticCanvas.height = staticCanvas.offsetHeight;
 
         let currentCoords = [];
         let zones = [];
@@ -222,49 +255,62 @@
             currentCoords = [];
         });
 
-        // Guardar zonas
+        // Guardar las zonas
         document.getElementById("save-areas").addEventListener("click", () => {
-            if (zones.length === 0) {
-                alert("No hay zonas para guardar.");
-                return;
-            }
-            fetch('/set_zones', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ zones })
-            })
-                .then(response => response.json())
-                .then(data => alert("Zonas guardadas correctamente"))
-                .catch(err => console.error("Error al guardar las zonas:", err));
+            alert("Zonas guardadas");
         });
 
         // Limpiar todas las zonas
         document.getElementById("clear-areas").addEventListener("click", () => {
-            currentCoords = [];
             zones = [];
-            isDrawing = false;
-            updateZoneList();
+            currentCoords = [];
             drawZones();
+            updateZoneList();
         });
 
-        // Actualizar lista de zonas en la interfaz
+        // Actualizar la lista de zonas
         function updateZoneList() {
             const list = document.getElementById("zone-list");
             list.innerHTML = "";
             zones.forEach((zone, index) => {
-                const item = document.createElement("li");
-                item.textContent = `Zona ${index + 1}: ${zone.type}`;
-                const deleteButton = document.createElement("button");
-                deleteButton.textContent = "Eliminar";
-                deleteButton.onclick = () => {
-                    zones.splice(index, 1);
-                    updateZoneList();
-                    drawZones();
-                };
-                item.appendChild(deleteButton);
-                list.appendChild(item);
+                const li = document.createElement("li");
+                li.innerHTML = `Zona ${index + 1} - ${zone.type} <button onclick="removeZone(${index})">Eliminar</button>`;
+                list.appendChild(li);
             });
         }
+
+        // Eliminar zona
+        function removeZone(index) {
+            zones.splice(index, 1);
+            updateZoneList();
+            drawZones();
+        }
+
+        // Iniciar detección (reproducir video)
+        startDetectionButton.addEventListener("click", () => {
+            video.style.display = "block"; // Mostrar video
+            video.play(); // Iniciar video
+            staticCanvas.style.display = "none"; // Ocultar imagen estática
+            drawZones(); // Iniciar dibujo de zonas
+        });
+
+        // Captura una imagen del primer fotograma del video
+        function captureFrame() {
+            const videoFrame = video;
+            staticContext.drawImage(videoFrame, 0, 0, staticCanvas.width, staticCanvas.height);
+        }
+
+        // Capturar fotograma cuando se carga la página (antes de iniciar el video)
+        video.addEventListener("loadeddata", captureFrame);
+
+        // Ajustar el tamaño del canvas cuando la ventana cambia de tamaño
+        window.addEventListener("resize", () => {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            staticCanvas.width = staticCanvas.offsetWidth;
+            staticCanvas.height = staticCanvas.offsetHeight;
+            drawZones();
+        });
     </script>
 </body>
 </html>
