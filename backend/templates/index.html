@@ -3,79 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurar Zonas de Detección</title>
+    <title>Configurar Zonas</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f4f4f4;
+            background-color: #222; /* Fondo oscuro */
+            color: white; /* Texto blanco */
         }
         h1 {
             text-align: center;
             padding: 20px;
+            margin: 0;
+            font-size: 2rem;
+            color: #00bcd4; /* Azul turquesa */
         }
         .container {
-            width: 80%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             margin: 0 auto;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 90%;
+            max-width: 800px;
+            background-color: #333;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+        }
+        .controls select, .controls button {
+            padding: 10px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+        }
+        .controls select {
+            background-color: #444;
+            color: white;
+            cursor: pointer;
+        }
+        .controls button {
+            background-color: #00bcd4; /* Azul turquesa */
+            color: white;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background-color: #0097a7; /* Azul más oscuro */
         }
         .drawing-container {
             position: relative;
-            width: 800px;
-            height: 600px;
-            margin: 0 auto;
-            background-color: #ddd;
-            border: 2px solid #aaa;
+            width: 90%;
+            max-width: 800px;
+            height: 500px;
+            background-color: #333; /* Fondo del canvas */
+            border-radius: 10px;
+            border: 2px solid #00bcd4; /* Azul turquesa */
+            overflow: hidden;
         }
         canvas {
             width: 100%;
             height: 100%;
             display: block;
         }
-        .controls {
-            text-align: center;
-            margin: 20px 0;
+        .zone-list {
+            width: 90%;
+            max-width: 800px;
+            margin-top: 20px;
+            background-color: #333;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
         }
-        button, select {
-            margin: 5px;
+        .zone-list h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+            color: #00bcd4;
+            text-align: center;
+        }
+        .zone-list ul {
+            list-style: none;
+            padding: 0;
+        }
+        .zone-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 5px 0;
             padding: 10px;
-            font-size: 16px;
-            border: 1px solid #007BFF;
+            background-color: #444;
+            border-radius: 5px;
+        }
+        .zone-list button {
+            background-color: #e91e63; /* Rosa */
+            color: white;
+            border: none;
+            padding: 5px 10px;
             border-radius: 5px;
             cursor: pointer;
         }
-        button {
-            background-color: #007BFF;
-            color: white;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .zone-list {
-            text-align: center;
-            margin: 20px 0;
+        .zone-list button:hover {
+            background-color: #c2185b; /* Rosa más oscuro */
         }
     </style>
 </head>
 <body>
-    <h1>Configurar Zonas de Detección</h1>
+    <h1>Configurar Zonas</h1>
     <div class="container">
+        <!-- Controles -->
         <div class="controls">
-            <label for="zone-type">Tipo de zona:</label>
             <select id="zone-type">
-                <option value="danger">Peligro (Rojo)</option>
-                <option value="warning">Advertencia (Amarillo)</option>
-                <option value="safe">Segura (Verde)</option>
+                <option value="critical">Zona Crítica</option>
+                <option value="supervised">Zona Supervisada</option>
+                <option value="common">Zona Común</option>
             </select>
-            <button id="add-zone">Añadir Zona</button>
-            <button id="save-areas">Guardar Zonas</button>
+            <button id="add-zone">Definir Área</button>
+            <button id="save-areas">Guardar</button>
             <button id="clear-areas">Limpiar Todo</button>
         </div>
+
+        <!-- Canvas para dibujar -->
         <div class="drawing-container">
             <canvas id="drawing-canvas"></canvas>
         </div>
+
+        <!-- Lista de Zonas -->
         <div class="zone-list">
-            <h3>Zonas Guardadas:</h3>
+            <h3>Zonas Guardadas</h3>
             <ul id="zone-list"></ul>
         </div>
     </div>
@@ -84,26 +143,25 @@
         const canvas = document.getElementById("drawing-canvas");
         const context = canvas.getContext("2d");
 
-        // Configuración inicial del canvas
-        canvas.width = 800;
-        canvas.height = 600;
+        // Configuración del canvas
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
 
-        let currentCoords = []; // Coordenadas actuales del polígono en construcción
-        let zones = []; // Todas las zonas dibujadas
-        let isDrawing = false; // Estado de dibujo
+        let currentCoords = [];
+        let zones = [];
+        let isDrawing = false;
         const colors = {
-            danger: "red",
-            warning: "yellow",
-            safe: "green"
+            critical: "red",
+            supervised: "yellow",
+            common: "green"
         };
 
-        // Dibujar todas las zonas en el canvas
+        // Dibujar todas las zonas
         function drawZones() {
             context.clearRect(0, 0, canvas.width, canvas.height); // Limpiar canvas
             for (const zone of zones) {
-                drawPolygon(zone.coords, zone.type, false);
+                drawPolygon(zone.coords, zone.type);
             }
-            // Dibujar el polígono actual
             if (currentCoords.length > 0) {
                 const currentType = document.getElementById("zone-type").value;
                 drawPolygon(currentCoords, currentType, true);
@@ -111,23 +169,22 @@
         }
 
         // Dibujar un polígono
-        function drawPolygon(coords, type, isTemporary) {
-            if (coords.length > 0) {
-                context.beginPath();
-                context.moveTo(coords[0].x, coords[0].y);
-                for (let i = 1; i < coords.length; i++) {
-                    context.lineTo(coords[i].x, coords[i].y);
-                }
-                if (!isTemporary) {
-                    context.closePath();
-                }
-                context.strokeStyle = colors[type];
-                context.lineWidth = 2;
-                context.stroke();
+        function drawPolygon(coords, type, isTemporary = false) {
+            if (coords.length === 0) return;
+            context.beginPath();
+            context.moveTo(coords[0].x, coords[0].y);
+            for (let i = 1; i < coords.length; i++) {
+                context.lineTo(coords[i].x, coords[i].y);
             }
+            if (!isTemporary) {
+                context.closePath();
+            }
+            context.strokeStyle = colors[type];
+            context.lineWidth = 2;
+            context.stroke();
         }
 
-        // Manejar clic en el canvas
+        // Manejar clics en el canvas
         canvas.addEventListener("click", (event) => {
             if (!isDrawing) return;
 
@@ -139,14 +196,13 @@
                 const dx = x - currentCoords[0].x;
                 const dy = y - currentCoords[0].y;
                 if (Math.sqrt(dx * dx + dy * dy) < 10) {
-                    // Cerrar el polígono si se hace clic cerca del primer punto
                     isDrawing = false;
                     zones.push({
                         coords: [...currentCoords],
                         type: document.getElementById("zone-type").value
                     });
-                    updateZoneList();
                     currentCoords = [];
+                    updateZoneList();
                     drawZones();
                     return;
                 }
@@ -156,18 +212,17 @@
             drawZones();
         });
 
-        // Botón para iniciar una nueva zona
+        // Iniciar una nueva zona
         document.getElementById("add-zone").addEventListener("click", () => {
             if (isDrawing) {
-                alert("Finaliza la zona actual antes de añadir otra.");
+                alert("Finaliza la zona actual antes de empezar otra.");
                 return;
             }
             isDrawing = true;
-            currentCoords = []; // Limpiar las coordenadas anteriores
-            drawZones();
+            currentCoords = [];
         });
 
-        // Botón para guardar zonas
+        // Guardar zonas
         document.getElementById("save-areas").addEventListener("click", () => {
             if (zones.length === 0) {
                 alert("No hay zonas para guardar.");
@@ -183,7 +238,7 @@
                 .catch(err => console.error("Error al guardar las zonas:", err));
         });
 
-        // Botón para limpiar todas las zonas
+        // Limpiar todas las zonas
         document.getElementById("clear-areas").addEventListener("click", () => {
             currentCoords = [];
             zones = [];
@@ -192,7 +247,7 @@
             drawZones();
         });
 
-        // Actualizar la lista de zonas en la interfaz
+        // Actualizar lista de zonas en la interfaz
         function updateZoneList() {
             const list = document.getElementById("zone-list");
             list.innerHTML = "";
@@ -201,7 +256,6 @@
                 item.textContent = `Zona ${index + 1}: ${zone.type}`;
                 const deleteButton = document.createElement("button");
                 deleteButton.textContent = "Eliminar";
-                deleteButton.style.marginLeft = "10px";
                 deleteButton.onclick = () => {
                     zones.splice(index, 1);
                     updateZoneList();
