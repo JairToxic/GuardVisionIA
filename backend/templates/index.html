@@ -138,7 +138,7 @@
             if (currentCoords.length > 0) {
                 const dx = x - currentCoords[0].x;
                 const dy = y - currentCoords[0].y;
-                if (Math.sqrt(dx + dx + dy * dy) < 10) {
+                if (Math.sqrt(dx * dx + dy * dy) < 10) {
                     // Cerrar el polígono si se hace clic cerca del primer punto
                     isDrawing = false;
                     zones.push({
