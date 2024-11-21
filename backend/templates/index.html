@@ -1,92 +1,216 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detección de Personas</title>
+    <title>Configurar Zonas de Detección</title>
     <style>
-        #video-container {
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            width: 80%;
+            margin: 0 auto;
+        }
+        .drawing-container {
             position: relative;
-            margin-bottom: 10px;
+            width: 800px;
+            height: 600px;
+            margin: 0 auto;
+            background-color: #ddd;
+            border: 2px solid #aaa;
         }
-        #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-            border: 1px dashed red;
-        }
-        #start-video {
+        canvas {
+            width: 100%;
+            height: 100%;
             display: block;
-            margin: 10px auto;
-            padding: 10px 20px;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button, select {
+            margin: 5px;
+            padding: 10px;
             font-size: 16px;
+            border: 1px solid #007BFF;
+            border-radius: 5px;
             cursor: pointer;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .zone-list {
+            text-align: center;
+            margin: 20px 0;
         }
     </style>
 </head>
 <body>
-    <h1>Detección de Personas en Video</h1>
-    <div id="video-container">
-        <!-- Cargar la imagen inicial del video para la configuración del área -->
-        <img id="video" src="/capture" width="800" />
-        <canvas id="canvas" width="800" height="600"></canvas>
+    <h1>Configurar Zonas de Detección</h1>
+    <div class="container">
+        <div class="controls">
+            <label for="zone-type">Tipo de zona:</label>
+            <select id="zone-type">
+                <option value="danger">Peligro (Rojo)</option>
+                <option value="warning">Advertencia (Amarillo)</option>
+                <option value="safe">Segura (Verde)</option>
+            </select>
+            <button id="add-zone">Añadir Zona</button>
+            <button id="save-areas">Guardar Zonas</button>
+            <button id="clear-areas">Limpiar Todo</button>
+        </div>
+        <div class="drawing-container">
+            <canvas id="drawing-canvas"></canvas>
+        </div>
+        <div class="zone-list">
+            <h3>Zonas Guardadas:</h3>
+            <ul id="zone-list"></ul>
+        </div>
     </div>
-    <!-- Botón para iniciar la transmisión de video -->
-    <button id="start-video" disabled>Iniciar Video</button>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const startButton = document.getElementById('start-video');
-        let isDrawing = false;
-        let startX, startY, width, height;
+        const canvas = document.getElementById("drawing-canvas");
+        const context = canvas.getContext("2d");
 
-        canvas.addEventListener('mousedown', (e) => {
-            isDrawing = true;
-            startX = e.offsetX;
-            startY = e.offsetY;
-        });
+        // Configuración inicial del canvas
+        canvas.width = 800;
+        canvas.height = 600;
 
-        canvas.addEventListener('mousemove', (e) => {
-            if (isDrawing) {
-                width = e.offsetX - startX;
-                height = e.offsetY - startY;
-                drawRectangle(startX, startY, width, height);
+        let currentCoords = []; // Coordenadas actuales del polígono en construcción
+        let zones = []; // Todas las zonas dibujadas
+        let isDrawing = false; // Estado de dibujo
+        const colors = {
+            danger: "red",
+            warning: "yellow",
+            safe: "green"
+        };
+
+        // Dibujar todas las zonas en el canvas
+        function drawZones() {
+            context.clearRect(0, 0, canvas.width, canvas.height); // Limpiar canvas
+            for (const zone of zones) {
+                drawPolygon(zone.coords, zone.type, false);
             }
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isDrawing = false;
-            sendCoordinates(startX, startY, width, height);
-            startButton.disabled = false;  // Habilita el botón para iniciar el video
-        });
-
-        function drawRectangle(x, y, w, h) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = 'blue';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, y, w, h);
+            // Dibujar el polígono actual
+            if (currentCoords.length > 0) {
+                const currentType = document.getElementById("zone-type").value;
+                drawPolygon(currentCoords, currentType, true);
+            }
         }
 
-        function sendCoordinates(x, y, w, h) {
-            fetch('/set_area', {
+        // Dibujar un polígono
+        function drawPolygon(coords, type, isTemporary) {
+            if (coords.length > 0) {
+                context.beginPath();
+                context.moveTo(coords[0].x, coords[0].y);
+                for (let i = 1; i < coords.length; i++) {
+                    context.lineTo(coords[i].x, coords[i].y);
+                }
+                if (!isTemporary) {
+                    context.closePath();
+                }
+                context.strokeStyle = colors[type];
+                context.lineWidth = 2;
+                context.stroke();
+            }
+        }
+
+        // Manejar clic en el canvas
+        canvas.addEventListener("click", (event) => {
+            if (!isDrawing) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            if (currentCoords.length > 0) {
+                const dx = x - currentCoords[0].x;
+                const dy = y - currentCoords[0].y;
+                if (Math.sqrt(dx + dx + dy * dy) < 10) {
+                    // Cerrar el polígono si se hace clic cerca del primer punto
+                    isDrawing = false;
+                    zones.push({
+                        coords: [...currentCoords],
+                        type: document.getElementById("zone-type").value
+                    });
+                    updateZoneList();
+                    currentCoords = [];
+                    drawZones();
+                    return;
+                }
+            }
+
+            currentCoords.push({ x, y });
+            drawZones();
+        });
+
+        // Botón para iniciar una nueva zona
+        document.getElementById("add-zone").addEventListener("click", () => {
+            if (isDrawing) {
+                alert("Finaliza la zona actual antes de añadir otra.");
+                return;
+            }
+            isDrawing = true;
+            currentCoords = []; // Limpiar las coordenadas anteriores
+            drawZones();
+        });
+
+        // Botón para guardar zonas
+        document.getElementById("save-areas").addEventListener("click", () => {
+            if (zones.length === 0) {
+                alert("No hay zonas para guardar.");
+                return;
+            }
+            fetch('/set_zones', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ x, y, w, h })
-            }).then(() => clearCanvas());
-        }
-
-        function clearCanvas() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-
-        // Inicia el video una vez configurada el área
-        startButton.addEventListener('click', () => {
-            document.getElementById('video').src = "{{ url_for('video') }}";
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ zones })
+            })
+                .then(response => response.json())
+                .then(data => alert("Zonas guardadas correctamente"))
+                .catch(err => console.error("Error al guardar las zonas:", err));
         });
+
+        // Botón para limpiar todas las zonas
+        document.getElementById("clear-areas").addEventListener("click", () => {
+            currentCoords = [];
+            zones = [];
+            isDrawing = false;
+            updateZoneList();
+            drawZones();
+        });
+
+        // Actualizar la lista de zonas en la interfaz
+        function updateZoneList() {
+            const list = document.getElementById("zone-list");
+            list.innerHTML = "";
+            zones.forEach((zone, index) => {
+                const item = document.createElement("li");
+                item.textContent = `Zona ${index + 1}: ${zone.type}`;
+                const deleteButton = document.createElement("button");
+                deleteButton.textContent = "Eliminar";
+                deleteButton.style.marginLeft = "10px";
+                deleteButton.onclick = () => {
+                    zones.splice(index, 1);
+                    updateZoneList();
+                    drawZones();
+                };
+                item.appendChild(deleteButton);
+                list.appendChild(item);
+            });
+        }
     </script>
 </body>
 </html>
